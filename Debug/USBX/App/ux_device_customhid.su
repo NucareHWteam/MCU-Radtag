@@ -1,0 +1,9 @@
+../USBX/App/ux_device_customhid.c:71:6:USB_Send_HidReport	96	static
+../USBX/App/ux_device_customhid.c:115:6:USB_Get_HidReport	16	static
+../USBX/App/ux_device_customhid.c:135:6:USBD_Custom_HID_Activate	8	static
+../USBX/App/ux_device_customhid.c:154:6:USBD_Custom_HID_Deactivate	8	static
+../USBX/App/ux_device_customhid.c:172:6:USBD_Custom_HID_SetFeature	8	static
+../USBX/App/ux_device_customhid.c:194:6:USBD_Custom_HID_GetReport	8	static
+../USBX/App/ux_device_customhid.c:217:6:USBD_Custom_HID_SetReport	16	static
+../USBX/App/ux_device_customhid.c:248:7:USBD_Custom_HID_EventMaxNumber	8	static
+../USBX/App/ux_device_customhid.c:267:7:USBD_Custom_HID_EventMaxLength	8	static

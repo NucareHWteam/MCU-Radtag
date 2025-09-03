@@ -1,0 +1,9 @@
+../USBX/App/ux_device_msc.c:70:6:USBD_STORAGE_Activate	0	static
+../USBX/App/ux_device_msc.c:85:6:USBD_STORAGE_Deactivate	0	static
+../USBX/App/ux_device_msc.c:106:6:USBD_STORAGE_Read	32	static
+../USBX/App/ux_device_msc.c:141:6:USBD_STORAGE_Write	0	static
+../USBX/App/ux_device_msc.c:170:6:USBD_STORAGE_Flush	0	static
+../USBX/App/ux_device_msc.c:196:6:USBD_STORAGE_Status	0	static
+../USBX/App/ux_device_msc.c:223:6:USBD_STORAGE_Notification	0	static
+../USBX/App/ux_device_msc.c:247:7:USBD_STORAGE_GetMediaLastLba	8	static
+../USBX/App/ux_device_msc.c:265:7:USBD_STORAGE_GetMediaBlocklength	8	static

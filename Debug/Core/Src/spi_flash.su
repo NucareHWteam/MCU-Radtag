@@ -1,0 +1,12 @@
+../Core/Src/spi_flash.c:140:20:SPI_FLASH_ReadStatus	32	static
+../Core/Src/spi_flash.c:154:26:SPI_FLASH_WaitForWriteCompletion	16	static
+../Core/Src/spi_flash.c:171:6:SPI_FLASH_Init	8	static
+../Core/Src/spi_flash.c:179:6:SPI_FLASH_WriteEnable	24	static
+../Core/Src/spi_flash.c:190:19:SPI_FLASH_EraseSector	24	static
+../Core/Src/spi_flash.c:203:19:SPI_FLASH_EraseBlock64k	24	static
+../Core/Src/spi_flash.c:216:6:SPI_FLASH_EraseChip	24	static
+../Core/Src/spi_flash.c:231:19:SPI_FLASH_PageProgram	32	static
+../Core/Src/spi_flash.c:269:19:SPI_FLASH_ReadData	32	static
+../Core/Src/spi_flash.c:302:6:HAL_SPI_TxCpltCallback	0	static
+../Core/Src/spi_flash.c:310:6:HAL_SPI_RxCpltCallback	8	static
+../Core/Src/spi_flash.c:323:6:HAL_SPI_ErrorCallback	8	static

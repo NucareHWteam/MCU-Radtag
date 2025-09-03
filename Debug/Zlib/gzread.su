@@ -1,0 +1,15 @@
+../Zlib/gzread.c:21:11:gz_load	40	static
+../Zlib/gzread.c:56:11:gz_avail	40	static
+../Zlib/gzread.c:91:11:gz_look	24	static
+../Zlib/gzread.c:175:11:gz_decomp	32	static
+../Zlib/gzread.c:229:11:gz_fetch	24	static
+../Zlib/gzread.c:259:11:gz_skip	24	static
+../Zlib/gzread.c:294:16:gz_read	32	static
+../Zlib/gzread.c:375:13:gzread	32	static
+../Zlib/gzread.c:411:18:gzfread	32	static
+../Zlib/gzread.c:447:13:gzgetc	40	static
+../Zlib/gzread.c:476:13:gzgetc_	16	static
+../Zlib/gzread.c:483:13:gzungetc	32	static
+../Zlib/gzread.c:543:16:gzgets	48	static
+../Zlib/gzread.c:607:13:gzdirect	24	static
+../Zlib/gzread.c:627:13:gzclose_r	32	static

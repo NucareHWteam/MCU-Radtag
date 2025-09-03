@@ -1,0 +1,17 @@
+../Core/Src/usb_msc_file_log.c:214:6:csv_gen_template_file	9
+../Core/Src/usb_msc_file_log.c:300:6:csv_init_general_dev_info	1
+../Core/Src/usb_msc_file_log.c:344:6:csv_append_new_record	8
+../Core/Src/usb_msc_file_log.c:445:13:fx_write_str	2
+../Core/Src/usb_msc_file_log.c:452:13:fx_write_blocks	2
+../Core/Src/usb_msc_file_log.c:466:13:minutes_to_hms_string	3
+../Core/Src/usb_msc_file_log.c:484:13:minutes_to_dhms_string_long	3
+../Core/Src/usb_msc_file_log.c:503:13:time_to_dmyhms_string	8
+../Core/Src/usb_msc_file_log.c:528:13:csv_header	2
+../Core/Src/usb_msc_file_log.c:543:13:csv_device_info	1
+../Core/Src/usb_msc_file_log.c:574:13:csv_trip_info	1
+../Core/Src/usb_msc_file_log.c:592:13:csv_conf_info	1
+../Core/Src/usb_msc_file_log.c:631:13:csv_alarm_summary	3
+../Core/Src/usb_msc_file_log.c:679:13:csv_log_summary	1
+../Core/Src/usb_msc_file_log.c:759:13:csv_recorded_data	1
+../Core/Src/usb_msc_file_log.c:769:13:csv_update_logging_summary	1
+../Core/Src/usb_msc_file_log.c:808:13:csv_update_alarm_config_summary	1

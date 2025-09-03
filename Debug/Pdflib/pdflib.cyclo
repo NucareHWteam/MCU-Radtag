@@ -1,0 +1,6 @@
+../Pdflib/pdflib.c:25:6:tpdf_draw_colored_text	2
+../Pdflib/pdflib.c:46:6:tpdf_draw_line	2
+../Pdflib/pdflib.c:73:6:tpdf_draw_simple_dashed_line	2
+../Pdflib/pdflib.c:87:10:tpdf_add_new_obj	1
+../Pdflib/pdflib.c:110:10:tpdf_start_new_stream_obj	1
+../Pdflib/pdflib.c:125:10:tpdf_end_new_stream_obj	1

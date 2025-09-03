@@ -1,0 +1,10 @@
+../Core/Src/meas_data_log.c:153:13:uart3_printf.constprop	144	static
+../Core/Src/meas_data_log.c:87:6:meas_data_log_fast_init	0	static
+../Core/Src/meas_data_log.c:116:6:meas_data_log_write	32	static
+../Core/Src/meas_data_log.c:146:6:meas_data_log_read	8	static
+../Core/Src/meas_data_log.c:168:6:dump_flash_status	16	static
+../Core/Src/meas_data_log.c:247:6:meas_data_log_erase	4120	static
+../Core/Src/meas_data_log.c:289:6:meas_data_log_erase_if_not_empty	4112	static
+../Core/Src/meas_data_log.c:318:6:meas_data_log_write_entry	32	static
+../Core/Src/meas_data_log.c:337:6:meas_data_log_read_entry	8	static
+../Core/Src/meas_data_log.c:349:6:meas_data_log_read_last	224	static

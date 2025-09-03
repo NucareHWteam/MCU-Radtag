@@ -1,0 +1,3 @@
+../FileX/App/app_filex.c:76:14:fx_media_earse	24	static
+../FileX/App/app_filex.c:97:6:MX_FileX_Init	16	static
+../FileX/App/app_filex.c:115:6:App_FileX_Init	64	static

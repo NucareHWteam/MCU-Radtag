@@ -1,0 +1,13 @@
+../Zlib/gzwrite.c:17:11:gz_init	40	static
+../Zlib/gzwrite.c:73:11:gz_comp	40	static
+../Zlib/gzwrite.c:145:11:gz_zero	32	static
+../Zlib/gzwrite.c:178:16:gz_write	40	static
+../Zlib/gzwrite.c:246:13:gzwrite	32	static
+../Zlib/gzwrite.c:274:18:gzfwrite	32	static
+../Zlib/gzwrite.c:304:13:gzputc	32	static
+../Zlib/gzwrite.c:352:13:gzputs	32	static
+../Zlib/gzwrite.c:379:15:gzvprintf	48	static
+../Zlib/gzwrite.c:451:15:gzprintf	28	static
+../Zlib/gzwrite.c:553:13:gzflush	24	static
+../Zlib/gzwrite.c:585:13:gzsetparams	32	static
+../Zlib/gzwrite.c:627:13:gzclose_w	24	static

@@ -1,0 +1,13 @@
+../Zlib/gzwrite.c:17:11:gz_init	6
+../Zlib/gzwrite.c:73:11:gz_comp	18
+../Zlib/gzwrite.c:145:11:gz_zero	8
+../Zlib/gzwrite.c:178:16:gz_write	17
+../Zlib/gzwrite.c:246:13:gzwrite	5
+../Zlib/gzwrite.c:274:18:gzfwrite	7
+../Zlib/gzwrite.c:304:13:gzputc	10
+../Zlib/gzwrite.c:352:13:gzputs	6
+../Zlib/gzwrite.c:379:15:gzvprintf	14
+../Zlib/gzwrite.c:451:15:gzprintf	1
+../Zlib/gzwrite.c:553:13:gzflush	8
+../Zlib/gzwrite.c:585:13:gzsetparams	11
+../Zlib/gzwrite.c:627:13:gzclose_w	9

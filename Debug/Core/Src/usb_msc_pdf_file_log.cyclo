@@ -1,0 +1,11 @@
+../Core/Src/usb_msc_pdf_file_log.c:1616:13:generate_pdf_raw_report	2
+../Core/Src/usb_msc_pdf_file_log.c:1701:13:pdf_page_handle_for_new_datapoints	1
+../Core/Src/usb_msc_pdf_file_log.c:741:12:pdf_alarm_row.constprop	4
+../Core/Src/usb_msc_pdf_file_log.c:548:12:draw_section_title.constprop	1
+../Core/Src/usb_msc_pdf_file_log.c:571:12:draw_key_value_pair.constprop	3
+../Core/Src/usb_msc_pdf_file_log.c:1232:13:pdf_chart_plot_data.constprop	3
+../Core/Src/usb_msc_pdf_file_log.c:1468:12:pdf_insert_datapoint_to_table.constprop	8
+../Core/Src/usb_msc_pdf_file_log.c:295:6:pdf_gen_template_file	5
+../Core/Src/usb_msc_pdf_file_log.c:345:6:pdf_append_new_record	6
+../Core/Src/usb_msc_pdf_file_log.c:418:6:pdf_append_all_flash_log_entries	10
+../Core/Src/usb_msc_pdf_file_log.c:471:6:pdf_gen_completed_report	37

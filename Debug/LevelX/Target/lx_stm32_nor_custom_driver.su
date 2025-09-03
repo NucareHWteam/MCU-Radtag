@@ -1,0 +1,5 @@
+../LevelX/Target/lx_stm32_nor_custom_driver.c:75:7:lx_stm32_nor_custom_driver_initialize	32	static
+../LevelX/Target/lx_stm32_nor_custom_driver.c:115:13:lx_nor_driver_read	56	static
+../LevelX/Target/lx_stm32_nor_custom_driver.c:145:13:lx_nor_driver_write	64	static
+../LevelX/Target/lx_stm32_nor_custom_driver.c:180:13:lx_nor_driver_block_erase	40	static
+../LevelX/Target/lx_stm32_nor_custom_driver.c:202:13:lx_nor_driver_block_erased_verify	304	static
