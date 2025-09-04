@@ -277,9 +277,8 @@ void csv_append_new_record(const file_log_time_t *time,
         return ;
     }
     time_to_dmyhms_string(time,tmp_time,sizeof(tmp_time));
-    snprintf(tmp_buff,
-            sizeof(tmp_buff),
-            " %s,  %.2f,  %.2f\n",
+    snprintf(tmp_buff,sizeof(tmp_buff),
+ " %s,  %.2f,  %.2f\n",
 			tmp_time,temperature,radiation);
 
     LOG_APP("Inserting to CSV, size: %u\r\n",(unsigned int)(f_size(&csv_file)));
@@ -487,19 +486,22 @@ void time_to_hhmmss_string(const file_log_time_t *time, char *buffer, size_t buf
 
 /* CSV file functions*/
 static void csv_header(void) {
+    fatfs_write_str(&csv_file, "sep=,\n");
+    fatfs_write_str(&csv_file, "Note:\n");
 
-    const char* header_static[] = {
-        "sep=,\n",
-        "Note:\n",
-        "All temperatures are in Degree Celsius.\n",
-        "All Radation are in uSv/h.\n",
-        "All times shown are based on UTC + 00:00 and 24-Hour clock [DD-MMM-YY HH:MM:SS]\n\n",
-    };
-    //device info offset + 1 (end of line)
-    log_csv.csv_fiels_offset.device_info_offset = sizeof(header_static) + 1;
-    for (int i = 0; i < sizeof(header_static)/sizeof(header_static[0]); ++i)
-        fatfs_write_str(&csv_file, header_static[i]);
+    const char *t_unit = (current_settings.display_temp_unit==0) ? "Celsius" : "Fahrenheit";
+    const char *r_unit = (current_settings.display_dose_unit==0) ? "uSv/h" : "uR/h";
+
+    char note[160];
+    snprintf(note, sizeof(note),
+             "All temperatures are in Degree %s.\n"
+             "All Radiation are in %s.\n",
+             t_unit, r_unit);
+    fatfs_write_str(&csv_file, note);
+
+    fatfs_write_str(&csv_file, "All times shown are based on UTC + 00:00 and 24-Hour clock [DD-MMM-YY HH:MM:SS]\n\n");
 }
+
 
 static void csv_device_info(const DeviceSettings *dev_setting) {
 
@@ -786,17 +788,34 @@ static void csv_alarm_summary_fill(const DeviceSettings *dev_setting)
                                rh_disp, s_delay, s_tot,
                                (unsigned long)violations, status);
         } else {
-            // TH/TL: 원시단위가 0.1이므로 /10 해서 부호 있는 정수 표시 (예: -600 → -60)
-            int thtl_disp = (i == 2) ? (int)(dev_setting->alarm_th1 / 10)
-                            : (i == 3) ? (int)(dev_setting->alarm_th2 / 10)
-                            : (i == 4) ? (int)(dev_setting->alarm_tl1 / 10)
-                                       : (int)(dev_setting->alarm_tl2 / 10);
+            // 0.1°C 스케일 → °C float
+            float t_c = (i == 2) ? (dev_setting->alarm_th1 / 10.0f)
+                       : (i == 3) ? (dev_setting->alarm_th2 / 10.0f)
+                       : (i == 4) ? (dev_setting->alarm_tl1 / 10.0f)
+                                  : (dev_setting->alarm_tl2 / 10.0f);
+
+            // 표시 단위 변환: °C(기본) or °F
+            float t_disp = t_c;
+            if (current_settings.display_temp_unit == 1) {
+                t_disp = t_c * 9.0f / 5.0f + 32.0f;   // °F
+            }
+
+            // ① 소수 1자리로 출력 (권장: 임계값 손실 없이 표시)
             offset += snprintf(tmp_buff + offset, fixed_block_size - offset,
-                               "%-4s: %6d   %-20s %-20s \t%-10lu %-10s\n",
+                               "%-4s: %6.1f   %-20s %-20s \t%-10lu %-10s\n",
                                log_csv.alarm_summary.zones[i].zone_name,
-                               thtl_disp, s_delay, s_tot,
+                               t_disp, s_delay, s_tot,
                                (unsigned long)violations, status);
+
+            // ② 정수로만 표기하고 싶다면 위 snprintf 대신 아래를 쓰세요:
+            // int t_int = (int)(t_disp + (t_disp >= 0 ? 0.5f : -0.5f)); // 반올림
+            // offset += snprintf(tmp_buff + offset, fixed_block_size - offset,
+            //                    "%-4s: %6d   %-20s %-20s \t%-10lu %-10s\n",
+            //                    log_csv.alarm_summary.zones[i].zone_name,
+            //                    t_int, s_delay, s_tot,
+            //                    (unsigned long)violations, status);
         }
+
 
         if (offset >= fixed_block_size) {
             printf("[CSV][AlarmFill][WARN] tmp_buff overflow, truncated\r\n");
@@ -928,18 +947,33 @@ static void csv_dump_log_entries_with_summary_seek(void) {
     log_csv.logging_summary.lowest_temp    = device_config.temp_min / 10.0f;
     log_csv.logging_summary.highest_radiation   = device_config.dose_max / 100.0f;  // ex: 1965 → 19.65uSv/h
 
-    // 1. Logging Summary Header 및 자리 확보
+    // 1. Logging Summary Header 및 자리 확보 (표시 단위 반영)
     char summary_buff[512] = {0};
     int offset = 0;
+
+    float hiT = log_csv.logging_summary.highest_temp;      // base: °C
+    float loT = log_csv.logging_summary.lowest_temp;       // base: °C
+    float hiR = log_csv.logging_summary.highest_radiation; // base: uSv/h
+
+    const char *T_unit = (current_settings.display_temp_unit==0) ? "C"    : "F";
+    const char *R_unit = (current_settings.display_dose_unit==0) ? "uSv/h": "uR/h";
+
+    if (current_settings.display_temp_unit==1) { // °C → °F
+        hiT = hiT*9.0f/5.0f + 32.0f;
+        loT = loT*9.0f/5.0f + 32.0f;
+    }
+    if (current_settings.display_dose_unit==1) { // uSv/h → uR/h
+        hiR = hiR*100.0f;
+    }
+
     offset += snprintf(summary_buff + offset, sizeof(summary_buff) - offset,
         "\nLogging Summary\n"
         "************************************************\n"
-        "Highest Temperature:   %6.1f\n"
-        "Lowest Temperature:    %6.1f\n"
-        "Highest Radiation Dose:%7.2f\n",
-        log_csv.logging_summary.highest_temp,
-        log_csv.logging_summary.lowest_temp,
-        log_csv.logging_summary.highest_radiation);
+        "Highest Temperature:   %6.1f (%s)\n"
+        "Lowest Temperature:    %6.1f (%s)\n"
+        "Highest Radiation Dose:%7.2f (%s)\n",
+        hiT, T_unit, loT, T_unit, hiR, R_unit);
+
 
     fatfs_write_str(&csv_file, summary_buff);
     log_csv.csv_fiels_offset.logging_summary_avg_offset = f_tell(&csv_file);
@@ -947,47 +981,70 @@ static void csv_dump_log_entries_with_summary_seek(void) {
     char summary_padding[512];
     memset(summary_padding, ' ', sizeof(summary_padding));
     f_write(&csv_file, summary_padding, sizeof(summary_padding), NULL);
-    // 2. 로그 헤더
-    fatfs_write_str(&csv_file,
+    // 2. 로그 헤더 (열 제목에 단위 표기, 데이터 숫자에는 단위 미표기)
+    const char *t_hdr = (current_settings.display_temp_unit==0) ? "C"    : "F";
+    const char *r_hdr = (current_settings.display_dose_unit==0) ? "uSv/h": "uR/h";
+
+    char rec_hdr[200];
+    snprintf(rec_hdr, sizeof(rec_hdr),
         "\nRecorded Data\n"
         "************************************************\n"
-        "Index,Date,Time,Temperature,Rad,Mark\n");
+        "Index,Date,Time,Temperature(%s),Radiation(%s),Mark\n",
+        t_hdr, r_hdr);
+    fatfs_write_str(&csv_file, rec_hdr);
 
+
+    // 3. Flash 순회
     // 3. Flash 순회
     for (uint32_t i = 0; i < max_idx; i++) {
         meas_data_log_read_entry(i, &entry);
         if (entry.year == 0xFF || entry.index == 0xFFFF || entry.month == 0xFF) break;
 
-        float temp = entry.temperature / 10.0f;
-        float dose = entry.dose / 100.0f;
-        char rad_str[16];
+        // --- 통계계산용 '기본단위' 값 (변환하지 않음) ---
+        float temp_base = entry.temperature / 10.0f;   // base: °C
+        float dose_base = entry.dose / 100.0f;         // base: uSv/h
 
-        // Rad 미측정 구간이면 "n/a"로
-        if (entry.rad_measure_mark == 0) {
-            strcpy(rad_str, "n/a");
-        } else {
-            snprintf(rad_str, sizeof(rad_str), "%.2f", dose);
+        // --- 표시용 '출력값' (설정에 따라 변환) ---
+        float temp_disp = temp_base;
+        float dose_disp = dose_base;
+
+        if (current_settings.display_temp_unit == 1) {
+            // °C → °F
+            temp_disp = temp_disp * 9.0f / 5.0f + 32.0f;
+        }
+        if (current_settings.display_dose_unit == 1) {
+            // uSv/h → uR/h
+            dose_disp = dose_disp * 100.0f;
         }
 
+        char rad_str[24];
+        if (entry.rad_measure_mark == 0) {
+            // Rad 미측정 구간이면 "n/a"
+            strcpy(rad_str, "n/a");
+        } else {
+            // 숫자만 기록 (단위는 열 제목에서 표시)
+            snprintf(rad_str, sizeof(rad_str), "%.2f", dose_disp);
+        }
+
+        // 최초/마지막 엔트리 갱신
         if (!first_found) {
             first = entry;
             first_found = true;
         }
         last = entry;
 
-        sum_temp += temp;
+        // --- 평균 계산은 '기본단위'로 누적 유지 ---
+        sum_temp += temp_base;
 
         if (entry.rad_measure_mark != 0) {
-            sum_dose += dose;
-            // rad valid count 별도
+            sum_dose += dose_base;    // base: uSv/h
             valid_rad_count++;
-
         }
         valid_count++;
 
-        // --- [추가] 루프 내부, sum/CSV 쓰기 전에 ---
-        int16_t  t_x10  = (int16_t)entry.temperature;   // 0.1℃ 단위
-        uint16_t d_x100 = (uint16_t)entry.dose;         // 0.01 단위
+        // --- 알람 게이트/판정 (원시 스케일 기준) ---
+        int16_t  t_x10  = (int16_t)entry.temperature;   // 0.1°C 단위
+        uint16_t d_x100 = (uint16_t)entry.dose;         // 0.01 uSv/h 단위
 
         uint32_t interval_sec = current_settings.temp_interval;
         uint32_t elapsed_sec  = (valid_count > 0) ? (valid_count - 1U) * interval_sec : 0U;
@@ -999,7 +1056,6 @@ static void csv_dump_log_entries_with_summary_seek(void) {
         bool gate_tl1 = (elapsed_sec >= current_settings.alarm_delay_tl1);
         bool gate_tl2 = (elapsed_sec >= current_settings.alarm_delay_tl2);
 
-        // 조건(게이트 적용) — RH는 유효 방사선 구간에서만 판정
         bool rh1_cond = gate_rh1 && (entry.rad_measure_mark != 0) && (d_x100 >= current_settings.alarm_rh1);
         bool rh2_cond = gate_rh2 && (entry.rad_measure_mark != 0) && (d_x100 >= current_settings.alarm_rh2);
         bool th1_cond = gate_th1 && (t_x10 >= current_settings.alarm_th1);
@@ -1007,7 +1063,6 @@ static void csv_dump_log_entries_with_summary_seek(void) {
         bool tl1_cond = gate_tl1 && (t_x10 <= current_settings.alarm_tl1);
         bool tl2_cond = gate_tl2 && (t_x10 <= current_settings.alarm_tl2);
 
-        // 카운트(현재 방식: 조건 만족 샘플 수 기반)
         if (rh1_cond) log_csv.logging_summary.RH1_alarm_count++;
         if (rh2_cond) log_csv.logging_summary.RH2_alarm_count++;
         if (th1_cond) log_csv.logging_summary.TH1_alarm_count++;
@@ -1015,34 +1070,16 @@ static void csv_dump_log_entries_with_summary_seek(void) {
         if (tl1_cond) log_csv.logging_summary.TL1_alarm_count++;
         if (tl2_cond) log_csv.logging_summary.TL2_alarm_count++;
 
-//        // 엣지 감지: false -> true 전환 시 1회만 증가
-//        if (rh1_cond) { if (!rh1_lat) { log_csv.logging_summary.RH1_alarm_count++; rh1_lat = true; } }
-//        else          { rh1_lat = false; }
-//
-//        if (rh2_cond) { if (!rh2_lat) { log_csv.logging_summary.RH2_alarm_count++; rh2_lat = true; } }
-//        else          { rh2_lat = false; }
-//
-//        if (th1_cond) { if (!th1_lat) { log_csv.logging_summary.TH1_alarm_count++; th1_lat = true; } }
-//        else          { th1_lat = false; }
-//
-//        if (th2_cond) { if (!th2_lat) { log_csv.logging_summary.TH2_alarm_count++; th2_lat = true; } }
-//        else          { th2_lat = false; }
-//
-//        if (tl1_cond) { if (!tl1_lat) { log_csv.logging_summary.TL1_alarm_count++; tl1_lat = true; } }
-//        else          { tl1_lat = false; }
-//
-//        if (tl2_cond) { if (!tl2_lat) { log_csv.logging_summary.TL2_alarm_count++; tl2_lat = true; } }
-//        else          { tl2_lat = false; }
-
-
+        // --- CSV 한 줄 출력: 숫자만 (단위 없음) ---
         snprintf(tmp_buff, sizeof(tmp_buff),
             "%u,%04u-%02u-%02u,%02u:%02u:%02u,%.1f,%s,0x%02X\n",
             entry.index,
             2000 + entry.year, entry.month, entry.day,
             entry.hour, entry.minute, entry.second,
-            temp, rad_str, entry.mark);
+            temp_disp, rad_str, entry.mark);
         fatfs_write_str(&csv_file, tmp_buff);
     }
+
 
     if (!first_found || valid_count == 0) {
         LOG_APP("[ERROR] No valid entries found!\n");
@@ -1075,12 +1112,28 @@ static void csv_dump_log_entries_with_summary_seek(void) {
     int avg_offset = 0;
     char time_str[32], tmp[20];
 
+    // 표시용 변환
+    float avgT_disp = avg_temp;   // base: °C
+    float avgR_disp = avg_dose;   // base: uSv/h
+    float mkt_disp  = mkt;        // base: °C
+
+    const char *T_unit2 = (current_settings.display_temp_unit==0) ? "C"    : "F";
+    const char *R_unit2 = (current_settings.display_dose_unit==0) ? "uSv/h": "uR/h";
+
+    if (current_settings.display_temp_unit==1) {
+        avgT_disp = avgT_disp*9.0f/5.0f + 32.0f;
+        mkt_disp  = mkt_disp*9.0f/5.0f + 32.0f;
+    }
+    if (current_settings.display_dose_unit==1) {
+        avgR_disp = avgR_disp*100.0f;
+    }
+
     avg_offset += snprintf(avg_text + avg_offset, sizeof(avg_text) - avg_offset,
-        "Average Temperature:   %6.1f\n", avg_temp);
+        "Average Temperature:   %6.1f (%s)\n", avgT_disp, T_unit2);
     avg_offset += snprintf(avg_text + avg_offset, sizeof(avg_text) - avg_offset,
-        "Average Radiation:     %6.1f\n", avg_dose);
+        "Average Radiation:     %6.1f (%s)\n", avgR_disp, R_unit2);
     avg_offset += snprintf(avg_text + avg_offset, sizeof(avg_text) - avg_offset,
-        "MKT:                   %6.1f\n", mkt);
+        "MKT:                   %6.1f (%s)\n", mkt_disp, T_unit2);
 
     time_to_dmyhms_string(&log_csv.logging_summary.start_time, time_str, sizeof(time_str));
     avg_offset += snprintf(avg_text + avg_offset, sizeof(avg_text) - avg_offset,
