@@ -785,16 +785,40 @@ static int pdf_alarm_row(FIL* file_ptr,
     // ── ON/OFF: 기존처럼 텍스트 출력 ──────────────────────────────────────────────
     // Alarm Zone 칼럼 (T*는 °C, R*는 uSv/h)
     if (data->zone_name[0] == 'T') {
-        sprintf(temp_buffer,
-                "BT %d 0 0 rg /F1 %d Tf 55 %d Td (%s %d (C)) Tj ET\n",
+        // threshold는 섭씨 기준으로 들어옴(예: th1/10)
+        float t = (float)(int16_t)data->threshold;
+        if (current_settings.display_temp_unit == 1) {
+            t = t*9.0f/5.0f + 32.0f;
+            sprintf(temp_buffer,
+                "BT %d 0 0 rg /F1 %d Tf 55 %d Td (%s %.1f (F)) Tj ET\n",
                 data->status, SECTION_CONTENT_FONT_SIZE, y_pos,
-                data->zone_name, (int16_t)data->threshold);
+                data->zone_name, t);
+        } else {
+            sprintf(temp_buffer,
+                "BT %d 0 0 rg /F1 %d Tf 55 %d Td (%s %.1f (C)) Tj ET\n",
+                data->status, SECTION_CONTENT_FONT_SIZE, y_pos,
+                data->zone_name, t);
+        }
     } else {
-        sprintf(temp_buffer,
-                "BT %d 0 0 rg /F1 %d Tf 55 %d Td (%s %u (uSv/h)) Tj ET\n",
+        // RH 임계값은 uSv/h 기준(raw: rh/100)
+        float r_usvh = (float)(uint16_t)data->threshold;
+        if (current_settings.display_dose_unit == 1) {
+            // uR/h: 정수 출력
+            unsigned ru = (unsigned)(r_usvh * 100.0f + 0.5f);
+            sprintf(temp_buffer,
+                "BT %d 0 0 rg /F1 %d Tf 55 %d Td (%s %u (uR/h)) Tj ET\n",
                 data->status, SECTION_CONTENT_FONT_SIZE, y_pos,
-                data->zone_name, (uint16_t)data->threshold);
+                data->zone_name, ru);
+        } else {
+            // uSv/h: 기존처럼 소수
+            sprintf(temp_buffer,
+                "BT %d 0 0 rg /F1 %d Tf 55 %d Td (%s %.1f (uSv/h)) Tj ET\n",
+                data->status, SECTION_CONTENT_FONT_SIZE, y_pos,
+                data->zone_name, r_usvh);
+        }
     }
+
+
     strcat(row_commands, temp_buffer);
 
     // Delay Time
@@ -910,28 +934,64 @@ static int pdf_logging_summary(FIL* file_ptr, int *y_pos,const logging_summary_t
     char tmp_buff[64];
 
     // Draw left column
-    snprintf(tmp_buff,sizeof(tmp_buff),"%.1f (C)",log->highest_temp);
+    // ---- display-unit conversion ----
+    const int use_f = (current_settings.display_temp_unit == 1);
+    const int use_uR = (current_settings.display_dose_unit == 1);
+    const char *T = use_f ? "F" : "C";
+    const char *R = use_uR ? "uR/h" : "uSv/h";
+
+    float hiT = log->highest_temp;
+    float loT = log->lowest_temp;
+    float avT = log->average_temp;
+    float mkt = log->mean_kinetic_temp;
+    float hiR = log->highest_radiation;
+    float avR = log->average_radiation;
+
+    if (use_f) {
+        hiT = hiT * 9.0f/5.0f + 32.0f;
+        loT = loT * 9.0f/5.0f + 32.0f;
+        avT = avT * 9.0f/5.0f + 32.0f;
+        mkt = mkt * 9.0f/5.0f + 32.0f;
+    }
+    if (use_uR) {
+        hiR *= 100.0f;
+        avR *= 100.0f;
+    }
+
+    // Draw left column with units
+    snprintf(tmp_buff,sizeof(tmp_buff),"%.1f (%s)",hiT,T);
     len += draw_key_value_pair(file_ptr, 55, current_y, "Highest Temperature :", tmp_buff);
     current_y -= LINE_SPACING;
 
-    snprintf(tmp_buff,sizeof(tmp_buff),"%.1f (C)",log->lowest_temp);
+    snprintf(tmp_buff,sizeof(tmp_buff),"%.1f (%s)",loT,T);
     len += draw_key_value_pair(file_ptr, 55, current_y, "Lowest Temperature :", tmp_buff);
     current_y -= LINE_SPACING;
 
-    snprintf(tmp_buff,sizeof(tmp_buff),"%.1f (C)",log->average_temp);
+    snprintf(tmp_buff,sizeof(tmp_buff),"%.1f (%s)",avT,T);
     len += draw_key_value_pair(file_ptr, 55, current_y, "Average Temperature :", tmp_buff);
     current_y -= LINE_SPACING;
 
-    snprintf(tmp_buff,sizeof(tmp_buff),"%.1f (C)",log->mean_kinetic_temp);
+    snprintf(tmp_buff,sizeof(tmp_buff),"%.1f (%s)",mkt,T);
     len += draw_key_value_pair(file_ptr, 55, current_y, "MKT :", tmp_buff);
     current_y -= LINE_SPACING;
 
-    snprintf(tmp_buff,sizeof(tmp_buff),"%.2f (uSv/h)",log->highest_radiation);
+    if (use_uR) {
+        snprintf(tmp_buff,sizeof(tmp_buff),"%u (%s)", (unsigned)(hiR + 0.5f), R);
+    } else {
+        snprintf(tmp_buff,sizeof(tmp_buff),"%.2f (%s)", hiR, R);
+    }
     len += draw_key_value_pair(file_ptr, 55, current_y, "Highest Rad :", tmp_buff);
     current_y -= LINE_SPACING;
 
-    snprintf(tmp_buff,sizeof(tmp_buff),"%.2f (uSv/h)",log->average_radiation);
+    if (use_uR) {
+        snprintf(tmp_buff,sizeof(tmp_buff),"%u (%s)", (unsigned)(avR + 0.5f), R);
+    } else {
+        snprintf(tmp_buff,sizeof(tmp_buff),"%.2f (%s)", avR, R);
+    }
     len += draw_key_value_pair(file_ptr, 55, current_y, "Average Rad :", tmp_buff);
+
+
+
 
     // Draw right column, resetting Y position
     current_y = initial_y;
@@ -968,7 +1028,7 @@ static int pdf_logging_summary(FIL* file_ptr, int *y_pos,const logging_summary_t
     }
 
     // 여기서 elapsed_sec 사용
-    seconds_to_dhms_string_long(elapsed_sec, tmp_buff, sizeof(tmp_buff));
+    seconds_to_dhms_string_long(log->elapsed_time_sec, tmp_buff, sizeof(tmp_buff));
     len += draw_key_value_pair(file_ptr, 300, current_y, "Elapsed Time :", tmp_buff);
     current_y -= LINE_SPACING;
 
@@ -1011,7 +1071,9 @@ static void pdf_chart_draw_axes(FIL* file_p, int y_pos, const float temp_highest
     tpdf_draw_line(file_p, CHART_X_START, chart_y_start - CHART_HEIGHT, CHART_X_START + CHART_WIDTH, chart_y_start - CHART_HEIGHT, 1.5, 0, 0, 0); // Top
 
     // --- Draw Y-Axis Labels (Temperature) ---
-    tpdf_draw_colored_text(file_p, CHART_X_START - 20, chart_y_start + 15, "F1", 11, 0, 0, 0, "[C]");
+    const char *yl_T = (current_settings.display_temp_unit==0) ? "[C]" : "[F]";
+    const char *yl_R = (current_settings.display_dose_unit==0) ? "[uSv/h]" : "[uR/h]";
+    tpdf_draw_colored_text(file_p, CHART_X_START - 20, chart_y_start + 15, "F1", 11, 0, 0, 0, yl_T);
     //FIXME: Is it always 4 labels for tempe?
     for (int i = 0; i < TEMP_LABLE_NUMS; i++) {
         float temp = (float) (g_temp_axis_min  + i * temper_label_interval);
@@ -1021,7 +1083,7 @@ static void pdf_chart_draw_axes(FIL* file_p, int y_pos, const float temp_highest
     }
 
     // --- Draw Y-Axis Labels (Radiation) ---
-    tpdf_draw_colored_text(file_p, CHART_X_START + CHART_WIDTH + 5, chart_y_start + 15, "F1", 11, 0, 0, 0, "[uSv/h]");
+    tpdf_draw_colored_text(file_p, CHART_X_START + CHART_WIDTH + 5, chart_y_start + 15, "F1", 11, 0, 0, 0, yl_R);
     // FIXME: Is it always 6 labels for tempe?
     for (int i = 0; i < RAD_LABEL_NUMS; i++) {
         float rad = RAD_MIN + i * rad_label_interval;
@@ -1093,123 +1155,120 @@ static void pdf_chart_draw_gridlines(FIL* file_p,int y_pos, const float temp_hig
 }
 
 
-
 #define ALARM_SHOULD_DRAW(pos) (GET_ALARM_STATE(device_config.alarm_state, (pos)) != ALARM_DISABLE)
-
-
 
 static void pdf_chart_draw_alarm_lines(FIL* file_p,
                                        int y_pos,
                                        const float temp_highest_scale_up,
-                                       const unsigned int rad_highest_scale_up,
+                                       const float rad_highest_scale_up,
                                        const DeviceSettings *dev_setting)
 {
+    // 좌표 기준/버퍼 (빼면 안 됨)
     const int chart_y_start = y_pos - FIELD_SPACING;
+    const int y_top    = chart_y_start - CHART_HEIGHT; // 그래프 상단(Y 최소)
+    const int y_bottom = chart_y_start;                 // 그래프 하단(Y 최대)
     int y = 0;
     char label_buffer[16];
 
-    const float th2 = dev_setting->alarm_th2 / 10.0f;
-    const float th1 = dev_setting->alarm_th1 / 10.0f;
-    const float tl2 = dev_setting->alarm_tl2 / 10.0f;
-    const float tl1 = dev_setting->alarm_tl1 / 10.0f;
-    const unsigned int rh2 = (unsigned int)(dev_setting->alarm_rh2 / 100);
-    const unsigned int rh1 = (unsigned int)(dev_setting->alarm_rh1 / 100);
+    // 표시 단위 플래그
+    const int use_f  = (current_settings.display_temp_unit == 1);
+    const int use_uR = (current_settings.display_dose_unit == 1);
 
-    //TH2
-    if (ALARM_SHOULD_DRAW(ALARM_STATE_POS_TH2) && (temp_highest_scale_up > th2)) {
-        y = (int)map_value(th2, g_temp_axis_min, temp_highest_scale_up,
-                           chart_y_start - CHART_HEIGHT, chart_y_start);
-        tpdf_draw_simple_dashed_line(file_p, CHART_X_START, y,
-                                     CHART_X_START + CHART_WIDTH, y,
-                                     1.5, 0.9, 0.4, 0.0, 4);
-        sprintf(label_buffer, "%0.1f", th2);
-        tpdf_draw_colored_text(file_p, CHART_X_START - 20, y - 3,
-                               "F2", 8, 0.9, 0.4, 0.0, label_buffer);
-        printf("[PDF][Chart] TH2 draw y=%d (%.1f)\r\n", y, th2);
-    } else {
-        printf("[PDF][Chart] TH2 skip (state=%d)\r\n",
-               GET_ALARM_STATE(device_config.alarm_state, ALARM_STATE_POS_TH2));
+    // 내부(raw) → 기본단위(float)
+    const float th2_c = dev_setting->alarm_th2 / 10.0f;   // °C
+    const float th1_c = dev_setting->alarm_th1 / 10.0f;   // °C
+    const float tl2_c = dev_setting->alarm_tl2 / 10.0f;   // °C
+    const float tl1_c = dev_setting->alarm_tl1 / 10.0f;   // °C
+
+    const float rh2_usvh = dev_setting->alarm_rh2 / 100.0f; // µSv/h
+    const float rh1_usvh = dev_setting->alarm_rh1 / 100.0f; // µSv/h
+
+    // 기본단위 → 표시단위
+    const float th2_v = use_f ? (th2_c * 9.0f/5.0f + 32.0f) : th2_c;
+    const float th1_v = use_f ? (th1_c * 9.0f/5.0f + 32.0f) : th1_c;
+    const float tl2_v = use_f ? (tl2_c * 9.0f/5.0f + 32.0f) : tl2_c;
+    const float tl1_v = use_f ? (tl1_c * 9.0f/5.0f + 32.0f) : tl1_c;
+
+    const float rh2_v = use_uR ? (rh2_usvh * 100.0f) : rh2_usvh; // uR/h 또는 µSv/h
+    const float rh1_v = use_uR ? (rh1_usvh * 100.0f) : rh1_usvh;
+
+    // 범위 체크 helper (값이 축 범위 내인지)
+    #define IN_TEMP_RANGE(v) ((v) >= g_temp_axis_min && (v) <= temp_highest_scale_up)
+    #define IN_RAD_RANGE(v)  ((v) >= (float)RAD_MIN && (v) <= (float)rad_highest_scale_up)
+    // Y가 실제 표시영역 내인지(픽셀)
+    #define IN_Y_BOUNDS(Y)   ((Y) >= y_top && (Y) <= y_bottom)
+
+    // ───────── TH2 ─────────
+    if (ALARM_SHOULD_DRAW(ALARM_STATE_POS_TH2) && IN_TEMP_RANGE(th2_v)) {
+        y = (int)map_value(th2_v, g_temp_axis_min, temp_highest_scale_up, y_top, y_bottom);
+        if (IN_Y_BOUNDS(y)) {
+            tpdf_draw_simple_dashed_line(file_p, CHART_X_START, y, CHART_X_START + CHART_WIDTH, y,
+                                         1.5, 0.9, 0.4, 0.0, 4);
+            snprintf(label_buffer, sizeof(label_buffer), "%.1f", th2_v);
+            tpdf_draw_colored_text(file_p, CHART_X_START - 20, y - 3, "F2", 8, 0.9, 0.4, 0.0, label_buffer);
+        }
     }
 
-    //TH1
-    if (ALARM_SHOULD_DRAW(ALARM_STATE_POS_TH1) && (temp_highest_scale_up > th1)) {
-        y = (int)map_value(th1, g_temp_axis_min, temp_highest_scale_up,
-                           chart_y_start - CHART_HEIGHT, chart_y_start);
-        tpdf_draw_simple_dashed_line(file_p, CHART_X_START, y,
-                                     CHART_X_START + CHART_WIDTH, y,
-                                     1.5, 1.0, 0.75, 0.5, 4);
-        sprintf(label_buffer, "%0.1f", th1);
-        tpdf_draw_colored_text(file_p, CHART_X_START - 20, y - 3,
-                               "F2", 8, 1.0, 0.75, 0.5, label_buffer);
-        printf("[PDF][Chart] TH1 draw y=%d (%.1f)\r\n", y, th1);
-    } else {
-        printf("[PDF][Chart] TH1 skip (state=%d)\r\n",
-               GET_ALARM_STATE(device_config.alarm_state, ALARM_STATE_POS_TH1));
+    // ───────── TH1 ─────────
+    if (ALARM_SHOULD_DRAW(ALARM_STATE_POS_TH1) && IN_TEMP_RANGE(th1_v)) {
+        y = (int)map_value(th1_v, g_temp_axis_min, temp_highest_scale_up, y_top, y_bottom);
+        if (IN_Y_BOUNDS(y)) {
+            tpdf_draw_simple_dashed_line(file_p, CHART_X_START, y, CHART_X_START + CHART_WIDTH, y,
+                                         1.5, 1.0, 0.75, 0.5, 4);
+            snprintf(label_buffer, sizeof(label_buffer), "%.1f", th1_v);
+            tpdf_draw_colored_text(file_p, CHART_X_START - 20, y - 3, "F2", 8, 1.0, 0.75, 0.5, label_buffer);
+        }
     }
 
-    //TL2
-    if (ALARM_SHOULD_DRAW(ALARM_STATE_POS_TL2) && (g_temp_axis_min < tl2)) {
-        y = (int)map_value(tl2, g_temp_axis_min, temp_highest_scale_up,
-                           chart_y_start - CHART_HEIGHT, chart_y_start);
-        tpdf_draw_simple_dashed_line(file_p, CHART_X_START, y,
-                                     CHART_X_START + CHART_WIDTH, y,
-                                     1.5, 0.6, 0.9, 0.6, 4);
-        sprintf(label_buffer, "%0.1f", tl2);
-        tpdf_draw_colored_text(file_p, CHART_X_START - 20, y - 3,
-                               "F2", 8, 0.6, 0.9, 0.6, label_buffer);
-        printf("[PDF][Chart] TL2 draw y=%d (%.1f)\r\n", y, tl2);
-    } else {
-        printf("[PDF][Chart] TL2 skip (state=%d)\r\n",
-               GET_ALARM_STATE(device_config.alarm_state, ALARM_STATE_POS_TL2));
+    // ───────── TL2 ─────────
+    if (ALARM_SHOULD_DRAW(ALARM_STATE_POS_TL2) && IN_TEMP_RANGE(tl2_v)) {
+        y = (int)map_value(tl2_v, g_temp_axis_min, temp_highest_scale_up, y_top, y_bottom);
+        if (IN_Y_BOUNDS(y)) {
+            tpdf_draw_simple_dashed_line(file_p, CHART_X_START, y, CHART_X_START + CHART_WIDTH, y,
+                                         1.5, 0.6, 0.9, 0.6, 4);
+            snprintf(label_buffer, sizeof(label_buffer), "%.1f", tl2_v);
+            tpdf_draw_colored_text(file_p, CHART_X_START - 20, y - 3, "F2", 8, 0.6, 0.9, 0.6, label_buffer);
+        }
     }
 
-    //TL1
-    if (ALARM_SHOULD_DRAW(ALARM_STATE_POS_TL1) && (g_temp_axis_min < tl1)) {
-        y = (int)map_value(tl1, g_temp_axis_min, temp_highest_scale_up,
-                           chart_y_start - CHART_HEIGHT, chart_y_start);
-        tpdf_draw_simple_dashed_line(file_p, CHART_X_START, y,
-                                     CHART_X_START + CHART_WIDTH, y,
-                                     1.5, 0.1, 0.5, 0.1, 4);
-        sprintf(label_buffer, "%0.1f", tl1);
-        tpdf_draw_colored_text(file_p, CHART_X_START - 20, y - 3,
-                               "F2", 8, 0.1, 0.5, 0.1, label_buffer);
-        printf("[PDF][Chart] TL1 draw y=%d (%.1f)\r\n", y, tl1);
-    } else {
-        printf("[PDF][Chart] TL1 skip (state=%d)\r\n",
-               GET_ALARM_STATE(device_config.alarm_state, ALARM_STATE_POS_TL1));
+    // ───────── TL1 ─────────
+    if (ALARM_SHOULD_DRAW(ALARM_STATE_POS_TL1) && IN_TEMP_RANGE(tl1_v)) {
+        y = (int)map_value(tl1_v, g_temp_axis_min, temp_highest_scale_up, y_top, y_bottom);
+        if (IN_Y_BOUNDS(y)) {
+            tpdf_draw_simple_dashed_line(file_p, CHART_X_START, y, CHART_X_START + CHART_WIDTH, y,
+                                         1.5, 0.1, 0.5, 0.1, 4);
+            snprintf(label_buffer, sizeof(label_buffer), "%.1f", tl1_v);
+            tpdf_draw_colored_text(file_p, CHART_X_START - 20, y - 3, "F2", 8, 0.1, 0.5, 0.1, label_buffer);
+        }
     }
 
-    //RH2
-    if (ALARM_SHOULD_DRAW(ALARM_STATE_POS_RH2) && (rad_highest_scale_up > rh2)) {
-        y = (int)map_value((float)rh2, (float)RAD_MIN, (float)rad_highest_scale_up,
-                           chart_y_start - CHART_HEIGHT, chart_y_start);
-        tpdf_draw_simple_dashed_line(file_p, CHART_X_START, y,
-                                     CHART_X_START + CHART_WIDTH, y,
-                                     1.5, 0.0, 0.75, 1.0, 4);
-        sprintf(label_buffer, "%u", rh2);
-        tpdf_draw_colored_text(file_p, CHART_X_START + CHART_WIDTH + 5, y - 3,
-                               "F2", 8, 0.0, 0.75, 1.0, label_buffer);
-        printf("[PDF][Chart] RH2 draw y=%d (%u)\r\n", y, rh2);
-    } else {
-        printf("[PDF][Chart] RH2 skip (state=%d)\r\n",
-               GET_ALARM_STATE(device_config.alarm_state, ALARM_STATE_POS_RH2));
+    // ───────── RH2 ─────────
+    if (ALARM_SHOULD_DRAW(ALARM_STATE_POS_RH2) && IN_RAD_RANGE(rh2_v)) {
+        y = (int)map_value(rh2_v, (float)RAD_MIN, (float)rad_highest_scale_up, y_top, y_bottom);
+        if (IN_Y_BOUNDS(y)) {
+            tpdf_draw_simple_dashed_line(file_p, CHART_X_START, y, CHART_X_START + CHART_WIDTH, y,
+                                         1.5, 0.0, 0.75, 1.0, 4);
+            if (use_uR) snprintf(label_buffer, sizeof(label_buffer), "%.0f", rh2_v);   // uR/h: 정수
+            else        snprintf(label_buffer, sizeof(label_buffer), "%.2f", rh2_v);   // uSv/h: 소수
+            tpdf_draw_colored_text(file_p, CHART_X_START + CHART_WIDTH + 5, y - 3, "F2", 8, 0.0, 0.75, 1.0, label_buffer);
+        }
     }
 
-    //RH1
-    if (ALARM_SHOULD_DRAW(ALARM_STATE_POS_RH1) && (rad_highest_scale_up > rh1)) {
-        y = (int)map_value((float)rh1, (float)RAD_MIN, (float)rad_highest_scale_up,
-                           chart_y_start - CHART_HEIGHT, chart_y_start);
-        tpdf_draw_simple_dashed_line(file_p, CHART_X_START, y,
-                                     CHART_X_START + CHART_WIDTH, y,
-                                     1.0, 0.5, 0.8, 1.0, 4);
-        sprintf(label_buffer, "%u", rh1);
-        tpdf_draw_colored_text(file_p, CHART_X_START + CHART_WIDTH + 5, y - 3,
-                               "F2", 8, 0.5, 0.8, 1.0, label_buffer);
-        printf("[PDF][Chart] RH1 draw y=%d (%u)\r\n", y, rh1);
-    } else {
-        printf("[PDF][Chart] RH1 skip (state=%d)\r\n",
-               GET_ALARM_STATE(device_config.alarm_state, ALARM_STATE_POS_RH1));
+    // ───────── RH1 ─────────
+    if (ALARM_SHOULD_DRAW(ALARM_STATE_POS_RH1) && IN_RAD_RANGE(rh1_v)) {
+        y = (int)map_value(rh1_v, (float)RAD_MIN, (float)rad_highest_scale_up, y_top, y_bottom);
+        if (IN_Y_BOUNDS(y)) {
+            tpdf_draw_simple_dashed_line(file_p, CHART_X_START, y, CHART_X_START + CHART_WIDTH, y,
+                                         1.0, 0.5, 0.8, 1.0, 4);
+            if (use_uR) snprintf(label_buffer, sizeof(label_buffer), "%.0f", rh1_v);   // uR/h: 정수
+            else        snprintf(label_buffer, sizeof(label_buffer), "%.2f", rh1_v);   // uSv/h: 소수
+            tpdf_draw_colored_text(file_p, CHART_X_START + CHART_WIDTH + 5, y - 3, "F2", 8, 0.5, 0.8, 1.0, label_buffer);
+        }
     }
+
+    #undef IN_TEMP_RANGE
+    #undef IN_RAD_RANGE
+    #undef IN_Y_BOUNDS
 }
 
 
@@ -1258,10 +1317,17 @@ static void pdf_gen_chart(FIL* file_p, int *y_pos, const logging_summary_t *log,
     //FIXME: hack right here
      const uint16_t record_nums = log->data_points_temp_count;
 
-    float temp_highest_scale_up = (log->highest_temp + TEMP_SCALE_UP);
-    unsigned int rad_highest_scale_up = (log->highest_radiation + RAD_SCALE_UP);
+     float t_max_c = log->highest_temp + TEMP_SCALE_UP;
+     float t_min_c = log->lowest_temp - 10.0f;
+     const int use_f  = (current_settings.display_temp_unit == 1);
+     const int use_uR = (current_settings.display_dose_unit == 1);
 
-    g_temp_axis_min = log->lowest_temp - 10.0f;
+     float temp_highest_scale_up = use_f ? (t_max_c*9.0f/5.0f + 32.0f) : t_max_c;
+     g_temp_axis_min            = use_f ? (t_min_c*9.0f/5.0f + 32.0f) : t_min_c;
+
+     float r_max_base = log->highest_radiation + RAD_SCALE_UP;   // base: uSv/h
+     unsigned int rad_highest_scale_up = use_uR ? (unsigned int)(r_max_base*100.0f)
+                                                : (unsigned int)(r_max_base);
 
     pdf_chart_draw_axes(file_p, *y_pos, temp_highest_scale_up ,rad_highest_scale_up, &log->start_time, &log->stop_time);
 //    pdf_chart_draw_axes(file_p,*y_pos,temp_highest_scale_up,rad_highest_scale_up,&(log->start_time),&(log->stop_time));
@@ -1301,21 +1367,38 @@ static void pdf_gen_chart(FIL* file_p, int *y_pos, const logging_summary_t *log,
 
             // Calculate coordinates of the previous chunk's last point
             float prev_x = map_value((float)(chunk_start_index - 1), 0.0f, (float)(record_nums - 1), CHART_X_START, CHART_X_START + CHART_WIDTH);
-            float prev_temp_y = map_value(last_entry_of_chunk.temperature, g_temp_axis_min , temp_highest_scale_up, chart_y_start - CHART_HEIGHT, chart_y_start);
-            float prev_dose_y = map_value(last_entry_of_chunk.dose, RAD_MIN, rad_highest_scale_up, chart_y_start - CHART_HEIGHT, chart_y_start);
+
+
 
             // Calculate coordinates of the current chunk's first point
             float curr_x = map_value((float)chunk_start_index, 0.0f, (float)(record_nums - 1), CHART_X_START, CHART_X_START + CHART_WIDTH);
-            float curr_temp_y = map_value(entry.temperature, g_temp_axis_min , temp_highest_scale_up, chart_y_start - CHART_HEIGHT, chart_y_start);
-            float curr_dose_y = map_value(entry.dose, RAD_MIN, rad_highest_scale_up, chart_y_start - CHART_HEIGHT, chart_y_start);
+
+            float prev_t = (float)last_entry_of_chunk.temperature/10.0f;
+            float prev_r = (float)last_entry_of_chunk.dose/100.0f;
+            if (use_f)  prev_t = prev_t*9.0f/5.0f + 32.0f;
+            if (use_uR) prev_r = prev_r*100.0f;
+
+            float curr_t = (float)entry.temperature/10.0f;
+            float curr_r = (float)entry.dose/100.0f;
+            if (use_f)  curr_t = curr_t*9.0f/5.0f + 32.0f;
+            if (use_uR) curr_r = curr_r*100.0f;
+
+            float prev_temp_y = map_value(prev_t, g_temp_axis_min, temp_highest_scale_up, chart_y_start - CHART_HEIGHT, chart_y_start);
+            float prev_dose_y = map_value(prev_r, RAD_MIN,          rad_highest_scale_up, chart_y_start - CHART_HEIGHT, chart_y_start);
+            float curr_temp_y = map_value(curr_t, g_temp_axis_min,  temp_highest_scale_up, chart_y_start - CHART_HEIGHT, chart_y_start);
+            float curr_dose_y = map_value(curr_r, RAD_MIN,          rad_highest_scale_up, chart_y_start - CHART_HEIGHT, chart_y_start);
 
             // Draw the connecting lines
             tpdf_draw_line(file_p, (int)prev_x, (int)prev_temp_y, (int)curr_x, (int)curr_temp_y, 0.75, 1.0f, 0.0f, 0.0f);
             tpdf_draw_line(file_p, (int)prev_x, (int)prev_dose_y, (int)curr_x, (int)curr_dose_y, 0.75, 0.0f, 0.0f, 1.0f);
         }
         // Add the data to our temporary buffers
-        tmp_temper[buffer_count] = (float)entry.temperature/ 10.0f;
-        tmp_dose[buffer_count] = (float)entry.dose/ 100.0f;
+        float t = (float)entry.temperature/10.0f;   // base: C
+        float r = (float)entry.dose/100.0f;         // base: uSv/h
+        if (use_f)  t = t*9.0f/5.0f + 32.0f;
+        if (use_uR) r = r*100.0f;
+        tmp_temper[buffer_count] = t;
+        tmp_dose[buffer_count]   = r;
         buffer_count++;
 
         // If the buffer is full, plot the data and reset the buffer
@@ -1431,8 +1514,11 @@ static void pdf_table_format_obj_8(void) {
       stream_length += tpdf_draw_line(&pdf_file, (PDF_PAGE_LEFT + 69 + i *CHILD_TABLE_SIZE), PDF_PAGE_TOP-20, (PDF_PAGE_LEFT + 69 + i *99), PDF_PAGE_BOTTOM + 20, 0.5, 0.5,0.5,0.5);
       //Data, C, mCV (49,20,30)
       stream_length += tpdf_draw_colored_text(&pdf_file,PDF_PAGE_LEFT + 10 + i *CHILD_TABLE_SIZE, PDF_PAGE_TOP - 30 ,"F2",6,0,0,0,"Date Time");
-      stream_length += tpdf_draw_colored_text(&pdf_file,PDF_PAGE_LEFT + 56 + i *CHILD_TABLE_SIZE, PDF_PAGE_TOP - 30 ,"F2",6,0,0,0,"C");
-      stream_length += tpdf_draw_colored_text(&pdf_file,PDF_PAGE_LEFT + 76 + i *CHILD_TABLE_SIZE, PDF_PAGE_TOP - 30 ,"F2",6,0,0,0,"uSv/h");
+      const char *hdr_T = (current_settings.display_temp_unit==0) ? "C" : "F";
+      const char *hdr_R = (current_settings.display_dose_unit==0) ? "uSv/h" : "uR/h";
+      stream_length += tpdf_draw_colored_text(&pdf_file,PDF_PAGE_LEFT + 56 + i *CHILD_TABLE_SIZE, PDF_PAGE_TOP - 30 ,"F2",6,0,0,0,hdr_T);
+      stream_length += tpdf_draw_colored_text(&pdf_file,PDF_PAGE_LEFT + 76 + i *CHILD_TABLE_SIZE, PDF_PAGE_TOP - 30 ,"F2",6,0,0,0,hdr_R);
+
     }
   }
   //FIXME: Should create obj footer??
@@ -1491,10 +1577,26 @@ static int pdf_insert_datapoint_to_table(const UINT record_num,
     time_to_dmyhms_string(time, time_buff, sizeof(time_buff));
     convert_record_num_to_x_y_position(record_num, &x_pos, &y_pos);
 
-    if (radiation < 0.0f)
-        snprintf(buff, sizeof(buff), "%s     %-5.1f      n/a",     time_buff, temperature);
-    else
-        snprintf(buff, sizeof(buff), "%s     %-5.1f      %-6.2f", time_buff, temperature, radiation);
+    const int use_f = (current_settings.display_temp_unit == 1);
+    const int use_uR = (current_settings.display_dose_unit == 1);
+
+    float t_disp = temperature;           // base: C
+    float r_disp = radiation;             // base: uSv/h (or -1.0f for n/a)
+    if (use_f)  t_disp = t_disp*9.0f/5.0f + 32.0f;
+    if (use_uR && r_disp >= 0.0f) r_disp = r_disp*100.0f;
+
+    if (radiation < 0.0f) {
+        snprintf(buff, sizeof(buff), "%s     %-5.1f      n/a", time_buff, t_disp);
+    } else {
+        if (use_uR) {
+            unsigned r_int = (unsigned)(r_disp + 0.5f); // uR/h 정수
+            snprintf(buff, sizeof(buff), "%s     %-5.1f      %-6u", time_buff, t_disp, r_int);
+        } else {
+            snprintf(buff, sizeof(buff), "%s     %-5.1f      %-6.2f", time_buff, t_disp, r_disp);
+        }
+    }
+
+
 
     // ★ 여기서 색을 최종 결정해서 찍습니다. (위쪽 rg 설정은 쓰지 마세요)
     float r = is_alarm ? 1.0f : 0.0f, g = 0.0f, b = 0.0f;
