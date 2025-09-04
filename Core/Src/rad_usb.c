@@ -382,6 +382,46 @@ static void Rad_USBX_HID_Set_Command(const uint8_t command_code) {
     Rad_USBX_HID_ACK_response(DEVICE_CID_SET_COMMAND_REQ, command_code, DEVICE_PACKET_SUCCESS);
 }
 
+// ---- helpers: epoch(2000-01-01 기준 초) -> YY/MM/DD hh:mm:ss
+static inline int is_leap_y2000(uint16_t y2000) {
+    uint16_t y = (uint16_t)(2000 + y2000);
+    return ((y % 4 == 0) && ((y % 100 != 0) || (y % 400 == 0)));
+}
+static inline uint8_t days_in_month_y2000(uint8_t m, uint16_t y2000) {
+    static const uint8_t dm[12] = {31,28,31,30,31,30,31,31,30,31,30,31};
+    if (m == 0 || m > 12) return 30;
+    if (m == 2) return dm[1] + (is_leap_y2000(y2000) ? 1 : 0);
+    return dm[m-1];
+}
+static void epoch_to_ymd_y2000(uint32_t epoch,
+                               uint8_t *yy, uint8_t *mm, uint8_t *dd,
+                               uint8_t *hh, uint8_t *mi, uint8_t *ss)
+{
+    uint32_t days = epoch / 86400U;
+    uint32_t rem  = epoch % 86400U;
+
+    *hh = (uint8_t)(rem / 3600U); rem %= 3600U;
+    *mi = (uint8_t)(rem / 60U);
+    *ss = (uint8_t)(rem % 60U);
+
+    uint16_t y = 0; // 2000년 기준 오프셋
+    for (;;) {
+        uint16_t diy = (uint16_t)(is_leap_y2000(y) ? 366 : 365);
+        if (days < diy) break;
+        days -= diy; ++y;
+    }
+    *yy = (uint8_t)(y % 100);
+
+    uint8_t m = 1;
+    for (;;) {
+        uint8_t dim = days_in_month_y2000(m, y);
+        if (days < dim) break;
+        days -= dim; ++m;
+    }
+    *mm = m;
+    *dd = (uint8_t)(days + 1);
+}
+
 
 static void Rad_USBX_HID_Get_Parameters(const uint8_t parm_id) {
     DeviceSettingPacket_t response_pkt = {0};
@@ -455,14 +495,23 @@ static void Rad_USBX_HID_Get_Parameters(const uint8_t parm_id) {
 
     case DEVICE_PID_START_TIME: {
         uint32_t epoch = current_settings.start_reservation_time;
-        response_pkt.data[0] = (uint8_t)(epoch & 0xFF);
-        response_pkt.data[1] = (uint8_t)((epoch >> 8) & 0xFF);
-        response_pkt.data[2] = (uint8_t)((epoch >> 16) & 0xFF);
-        response_pkt.data[3] = (uint8_t)((epoch >> 24) & 0xFF);
-        response_pkt.len = 4;
-        printf("[USB][GET_PARAM] START_TIME -> epoch=%lu\n", (unsigned long)epoch);
+
+        uint8_t yy=0, mm=0, dd=0, hh=0, mi=0, ss=0;
+        epoch_to_ymd_y2000(epoch, &yy, &mm, &dd, &hh, &mi, &ss);
+
+        response_pkt.data[0] = yy; // 2000년 기준(00~99)
+        response_pkt.data[1] = mm;
+        response_pkt.data[2] = dd;
+        response_pkt.data[3] = hh;
+        response_pkt.data[4] = mi;
+        response_pkt.data[5] = ss;
+        response_pkt.len     = 6;
+
+        printf("[USB][GET_PARAM] START_TIME -> 20%02u-%02u-%02u %02u:%02u:%02u (epoch=%lu)\n",
+               yy, mm, dd, hh, mi, ss, (unsigned long)epoch);
         break;
     }
+
 
     case DEVICE_PID_PAUSE:
         printf("[USB][GET_PARAM] PAUSE -> %u\n", current_settings.pause_enable);
