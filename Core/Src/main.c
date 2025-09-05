@@ -678,25 +678,54 @@ void Start_Delay_Timer()
 
 }
 
-void Get_in_Shutdown(){
-	printf("Getting on to sleep(Button)\r\n");
-
-
-	Save_Power_Function();
-
-	HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN1_LOW);
-	HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN2_HIGH); // PC13 핀 High 레벨에서 깨우기
-
-    HAL_SuspendTick(); // SysTick 멈춤
-//  HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
-    HAL_PWR_EnterSHUTDOWNMode();
-//    HAL_PWREx_EnterSTOP2Mode(PWR_STOPENTRY_WFI);
-//  SystemClock_Config();            // 시스템 클럭 재설정
-//  MX_USART3_UART_Init();           // UART 반드시 재초기화
-  HAL_ResumeTick();
-    printf("Wake Up!\r\n");
-
+// 알람/웨이크업 타이머 '설정 상태'는 유지하고, 발생 플래그만 지우는 버전
+static void Clear_Wakeup_Flags_Only(void) {
+    // RTC Alarm A 발생 플래그가 서 있었다면 지움(알람 동작 상태는 유지)
+    if (__HAL_RTC_ALARM_GET_FLAG(&hrtc, RTC_FLAG_ALRAF) != RESET) {
+        __HAL_RTC_ALARM_CLEAR_FLAG(&hrtc, RTC_FLAG_ALRAF);
+    }
+    // WUT 발생 플래그도 동일하게
+    if (__HAL_RTC_WAKEUPTIMER_GET_FLAG(&hrtc, RTC_FLAG_WUTF) != RESET) {
+        __HAL_RTC_WAKEUPTIMER_CLEAR_FLAG(&hrtc, RTC_FLAG_WUTF);
+    }
+    // PWR Wakeup 플래그들 초기화
+    __HAL_PWR_CLEAR_FLAG(PWR_FLAG_WU);
 }
+
+
+void Get_in_Shutdown(void)
+{
+    printf("Getting on to sleep (keep pre-armed alarm)\r\n");
+
+    Save_Power_Function();
+
+    // (A) 웨이크 핀 비활성 및 플래그만 정리 (알람/타이머는 건드리지 않음)
+    HAL_PWR_DisableWakeUpPin(PWR_WAKEUP_PIN1);
+    HAL_PWR_DisableWakeUpPin(PWR_WAKEUP_PIN2);
+    Clear_Wakeup_Flags_Only(); // ★ 알람 보존
+
+    // (B) Shutdown 동안 핀을 '비활성 레벨'로 고정 (즉시 웨이크 방지)
+    HAL_PWREx_EnablePullUpPullDownConfig();
+    // WKUP1은 LOW가 활성 → 평소엔 HIGH가 안전 ⇒ Pull-Up
+    HAL_PWREx_EnableGPIOPullUp  (PWR_GPIO_A, PWR_GPIO_BIT_0);   // PA0 ↑
+    // WKUP2는 HIGH가 활성 → 평소엔 LOW가 안전 ⇒ Pull-Down
+    HAL_PWREx_EnableGPIOPullDown(PWR_GPIO_C, PWR_GPIO_BIT_13);  // PC13 ↓
+
+    // (C) 웨이크 핀 재활성화 (활성 극성은 기존과 동일)
+    HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN1_LOW);
+    HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN2_HIGH);
+
+    // Enable 직후 과거 잔여 플래그를 한 번 더 정리 (즉시 웨이크 방지)
+    __HAL_PWR_CLEAR_FLAG(PWR_FLAG_WU);
+
+    // (D) Shutdown 진입
+    HAL_SuspendTick();
+    HAL_PWR_EnterSHUTDOWNMode();
+    HAL_ResumeTick();
+
+    printf("Wake Up!\r\n");
+}
+
 ////////////////////////////////////FLASH Function/////////////////////////////////////////////
 
 
